@@ -1,182 +1,270 @@
-import React, { useState } from "react";
-import { promoGenerateVideo, veoGenerateVideo } from "../../api";
+import React, { useMemo, useState } from "react";
+import { analyzeProduct, fusionGenerate, promoGenerateVideo, veoGenerateVideo } from "../../api";
+
+/** Helper convert file -> dataURL */
+async function fileToDataURL(file){
+  if(!file) return null;
+  return new Promise((res,rej)=>{
+    const r = new FileReader();
+    r.onload = ()=>res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
 
 export default function ProductFusion({ onLog }){
-  const [product, setProduct] = useState(null);
-  const [scene, setScene] = useState(null);
-  const [pos, setPos] = useState({x:50,y:50});
-  const [activeTab, setActiveTab] = useState("composite");
-  const [compositeReady, setCompositeReady] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState(null);
+  const [step, setStep] = useState(1);
 
+  // Step 1: Product
+  const [productFile, setProductFile] = useState(null);
+  const [productDataURL, setProductDataURL] = useState(null);
+  const [productInsights, setProductInsights] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  // Step 2: Model (person) — optional
+  const [modelFile, setModelFile] = useState(null);
+  const [modelDataURL, setModelDataURL] = useState(null);
+
+  // Step 3: Results
+  const [gallery, setGallery] = useState([]); // up to 5
+  const [picked, setPicked] = useState(null);
+
+  // Promo config
   const [brand, setBrand] = useState("Bangpit Foods");
   const [productName, setProductName] = useState("Ayam Gepuk Bangpit");
   const [ratio, setRatio] = useState("9:16");
-  const [duration, setDuration] = useState(20);
-  const [vibe, setVibe] = useState("fast-cut, appetizing, street-food vibe, upbeat music");
-  const [cta, setCta] = useState("Datang ke Taman Suria (berdekatan Surau Kayu) — buka 12pm–7pm. Follow TikTok @bangpitfoods");
+  const [duration, setDuration] = useState(15);
+  const [cta, setCta] = useState("Datang ke Taman Suria — 12pm–7pm. Follow @bangpitfoods");
 
-  const onImg = (setter) => (e)=> setter(e.target.files?.[0] ?? null);
-  const onClickCanvas = (e)=>{
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left)/rect.width)*100;
-    const y = ((e.clientY - rect.top)/rect.height)*100;
-    setPos({x: Math.round(x), y: Math.round(y)});
+  const canNext1 = !!productFile && !!productInsights;
+  const canNext2 = true; // model optional
+  const canGenerate = !!productDataURL;
+
+  const uploadProduct = async (e)=>{
+    const f = e.target.files?.[0]; if(!f) return;
+    setProductFile(f);
+    const url = await fileToDataURL(f);
+    setProductDataURL(url);
+    setProductInsights(null);
   };
 
-  // Stub composite preview (gantikan dengan AI sebenar bila ready)
-  const generateComposite = ()=>{
-    onLog?.({ action:"PRODUCT_FUSION_REQUEST", data:{ product: product?.name, scene: scene?.name, dropPosition: pos }});
-    const canvas = document.createElement("canvas");
-    canvas.width = 1024; canvas.height = 1024;
-    const ctx = canvas.getContext("2d");
-    const g = ctx.createLinearGradient(0,0,1024,1024);
-    g.addColorStop(0, "#0b0f15"); g.addColorStop(1, "#1b2130");
-    ctx.fillStyle = g; ctx.fillRect(0,0,1024,1024);
-    ctx.fillStyle = "#6ae3ff";
-    ctx.beginPath(); ctx.arc((pos.x/100)*1024, (pos.y/100)*1024, 14, 0, Math.PI*2); ctx.fill();
-    const url = canvas.toDataURL("image/png");
-    setPreviewUrl(url);
-    setCompositeReady(true);
-    setActiveTab("promo");
-    onLog?.({ action:"PRODUCT_FUSION_RESPONSE", data:{ previewUrl: "[data-url]", pos }});
+  const uploadModel = async (e)=>{
+    const f = e.target.files?.[0] || null;
+    setModelFile(f);
+    const url = f ? await fileToDataURL(f) : null;
+    setModelDataURL(url);
   };
 
-  const SHOT_PRESET = [
-    { t: 0,  len: 3,  desc: "Hero shot: produk besar, lighting dramatik, steam subtle" },
-    { t: 3,  len: 3,  desc: "Close-up tekstur (macro, shallow DOF)" },
-    { t: 6,  len: 4,  desc: "Scene kedai: tangan serve di meja" },
-    { t: 10, len: 4,  desc: "B-roll: parallax, highlight logo & harga" },
-    { t: 14, len: 4,  desc: "CTA: lokasi + waktu + QR code" }
-  ];
-
-  const buildMontagePayload = ()=>({
-    brand, productName, ratio, duration, vibe, cta,
-    shots: SHOT_PRESET.map(s => ({ start: s.t, duration: s.len, instruction: s.desc })),
-    overlays: [
-      { type: "text", when: 1,  text: productName, style: "bold, glowing outline" },
-      { type: "text", when: 12, text: cta,        style: "semi bold, bottom center" }
-    ]
-  });
-
-  const generatePromoScript = async ()=>{
-    const payload = buildMontagePayload();
-    onLog?.({ action:"PROMO_SCRIPT_REQUEST", data: payload });
-    const res = await promoGenerateVideo(payload);
-    onLog?.({ action:"PROMO_SCRIPT_RESPONSE", data: res.data });
-    return res?.data?.script;
-  };
-
-  const generatePromoVideo = async ()=>{
+  const runAnalyze = async ()=>{
     try{
-      const script = await generatePromoScript();
-      const res = await veoGenerateVideo({ script, ratio, durationSecs: duration, numberOfVideos: 1, generatePeople: false });
-      onLog?.({ action:"PROMO_VIDEO_RESPONSE", data: res.data });
+      setBusy(true);
+      onLog?.({ action:"PF_ANALYZE_REQUEST" });
+      const res = await analyzeProduct({ imageDataURL: productDataURL });
+      setProductInsights(res.data);
+      onLog?.({ action:"PF_ANALYZE_RESPONSE", data: res.data });
+    }catch(e){
+      onLog?.({ action:"PF_ANALYZE_ERROR", error: e?.message || String(e) });
+      alert("Gagal analisa produk.");
+    }finally{ setBusy(false); }
+  };
+
+  const runGenerate = async ()=>{
+    try{
+      setBusy(true);
+      onLog?.({ action:"PF_FUSION_REQUEST", data:{ hasModel: !!modelDataURL }});
+      const res = await fusionGenerate({
+        productDataURL,
+        modelDataURL,
+        context: productInsights?.insights || {},
+        maxOutputs: 5,
+        ratio
+      });
+      const outs = res?.data?.images || [];
+      setGallery(outs.slice(0,5));
+      setPicked(null);
+      onLog?.({ action:"PF_FUSION_RESPONSE", data:{ count: outs.length }});
+      setStep(3);
+    }catch(e){
+      onLog?.({ action:"PF_FUSION_ERROR", error: e?.message || String(e) });
+      alert("Gagal generate komposit.");
+    }finally{ setBusy(false); }
+  };
+
+  const buildPromoScript = ()=>{
+    return {
+      meta: { version: 1, brand, productName, ratio, duration, vibe: "fast-cut, appetizing, upbeat" },
+      cta,
+      shots: [
+        { start:0,  duration:3,  instruction:"Hero shot: product big, glossy, specular highlights, quick dolly-in" },
+        { start:3,  duration:3,  instruction:"Macro texture close-up, shallow DOF, steam subtle" },
+        { start:6,  duration:4,  instruction:"Model holding product, smiling, hand movement, parallax background" },
+        { start:10, duration:5,  instruction:"CTA + price + location overlay; upbeat music, quick cuts" }
+      ],
+      overlays: [
+        { type:"text", when: 0.5, text: productName, style:"bold, glowing outline, top-left" },
+        { type:"text", when: 11,  text: cta,        style:"semi bold, bottom center" }
+      ],
+      // we pass chosen image as reference
+      referenceImage: picked
+    };
+  };
+
+  const makePromo = async ()=>{
+    if(!picked) return alert("Pilih satu gambar dahulu.");
+    try{
+      setBusy(true);
+      onLog?.({ action:"PF_PROMO_BUILD" });
+      const script = buildPromoScript();
+      // optional: save script preview
+      const res = await promoGenerateVideo(script);
+      onLog?.({ action:"PF_PROMO_SCRIPT_RESPONSE", data: res.data });
+
+      const res2 = await veoGenerateVideo({
+        script: res?.data?.script || script,
+        ratio,
+        durationSecs: duration,
+        numberOfVideos: 1,
+        generatePeople: true, // allow people for TikTok style
+        modelId: "veo-3.0"
+      });
+      onLog?.({ action:"PF_PROMO_VIDEO_RESPONSE", data: res2.data });
       alert("Promo video request dihantar. Rujuk Activity Log.");
     }catch(e){
-      onLog?.({ action:"PROMO_VIDEO_ERROR", error: e?.message || String(e) });
+      onLog?.({ action:"PF_PROMO_ERROR", error: e?.message || String(e) });
       alert("Gagal jana promo video.");
-    }
+    }finally{ setBusy(false); }
   };
+
+  const Stepper = useMemo(()=>(
+    <div className="card" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+      {["Produk","Model","Hasil"].map((t,i)=>(
+        <div key={t} className="chip" style={{
+          background: step===i+1 ? "linear-gradient(135deg,#2f6df6,#6ae3ff)" : "#0c111a",
+          color: step===i+1 ? "#05101a" : "#b9c3da",
+          border: step===i+1 ? "none" : "1px solid #253049",
+          fontWeight: step===i+1 ? 800 : 600
+        }}>{i+1}. {t}</div>
+      ))}
+    </div>
+  ),[step]);
 
   return (
     <>
-      <div className="card">
-        <div className="stack" style={{alignItems:"center", justifyContent:"space-between"}}>
-          <div className="stack">
-            <button className={`btn ${activeTab==="composite"?"primary":""}`} onClick={()=>setActiveTab("composite")}>Composite</button>
-            <button className={`btn ${activeTab==="promo"?"primary":""}`} onClick={()=>setActiveTab("promo")} disabled={!compositeReady}>Promo Video</button>
-          </div>
-          <span className="pill">Drop: {pos.x}% , {pos.y}%</span>
-        </div>
-      </div>
+      {Stepper}
 
-      {activeTab==="composite" && (
+      {/* STEP 1: PRODUCT */}
+      {step===1 && (
         <>
           <div className="card half">
-            <div className="grid cols-2">
-              <div>
-                <div className="label">Product</div>
-                <input className="input" type="file" accept="image/*" onChange={onImg(setProduct)}/>
-              </div>
-              <div>
-                <div className="label">Scene</div>
-                <input className="input" type="file" accept="image/*" onChange={onImg(setScene)}/>
-              </div>
-            </div>
-            <div className="label" style={{marginTop:10}}>Drop Position</div>
-            <div style={{height:260,background:"#0b0f15",border:"1px solid #1e2330",borderRadius:12,position:"relative"}}
-                onClick={onClickCanvas}>
-              <div style={{position:"absolute",left:`calc(${pos.x}% - 6px)`,top:`calc(${pos.y}% - 6px)`,width:12,height:12,borderRadius:12,background:"#6ae3ff",boxShadow:"0 0 12px rgba(106,227,255,.6)"}}/>
-            </div>
+            <h3 style={{marginTop:0}}>1) Upload Produk</h3>
+            <input className="input" type="file" accept="image/*" onChange={uploadProduct}/>
+            {productDataURL && (
+              <>
+                <div className="label" style={{marginTop:10}}>Preview</div>
+                <img src={productDataURL} alt="product" style={{width:"100%",borderRadius:12,border:"1px solid #1e2330"}}/>
+              </>
+            )}
             <div className="stack" style={{marginTop:12}}>
-              <button className="btn">Undo</button>
-              <button className="btn">Redo</button>
-              <button className="btn primary" onClick={generateComposite} disabled={!product || !scene}>Generate Composite</button>
+              <button className="btn" onClick={()=>setProductFile(null)}>Clear</button>
+              <button className="btn primary" disabled={!productDataURL || busy} onClick={runAnalyze}>
+                {busy? "Analyzing..." : "Analyze Product"}
+              </button>
             </div>
           </div>
 
           <div className="card half">
-            <div className="label">Preview</div>
-            {previewUrl ? (
-              <img src={previewUrl} alt="composite-preview" style={{width:"100%",borderRadius:12,border:"1px solid #1e2330"}}/>
+            <div className="label">Hasil Analisa</div>
+            {productInsights ? (
+              <pre className="log" style={{maxHeight:280}}>{JSON.stringify(productInsights,null,2)}</pre>
             ) : (
-              <div className="muted mini">Hasil komposit akan muncul di sini.</div>
+              <div className="muted mini">AI akan keluarkan kategori, warna dominan, cadangan latar, angle, dsb.</div>
             )}
-            <div className="mini muted" style={{marginTop:8}}>*Bila API sebenar disambung, imej ini akan jadi hasil AI yang match lighting & shadow.</div>
+            <div className="stack" style={{marginTop:12}}>
+              <button className="btn primary" disabled={!canNext1} onClick={()=>setStep(2)}>Next: Model</button>
+            </div>
           </div>
         </>
       )}
 
-      {activeTab==="promo" && (
+      {/* STEP 2: MODEL */}
+      {step===2 && (
         <>
           <div className="card half">
-            <div className="label">Brand</div>
-            <input className="input" value={brand} onChange={e=>setBrand(e.target.value)} placeholder="Bangpit Foods" />
-
-            <div className="label" style={{marginTop:10}}>Product Name</div>
-            <input className="input" value={productName} onChange={e=>setProductName(e.target.value)} placeholder="Ayam Gepuk Bangpit" />
-
-            <div className="stack" style={{marginTop:10}}>
-              <div style={{flex:1}}>
-                <div className="label">Aspect Ratio</div>
-                <select className="input" value={ratio} onChange={e=>setRatio(e.target.value)}>
-                  <option>9:16</option><option>16:9</option><option>1:1</option>
-                </select>
-              </div>
-              <div style={{width:140}}>
-                <div className="label">Duration (s)</div>
-                <input className="input" type="number" min="6" max="60" value={duration} onChange={e=>setDuration(Number(e.target.value))}/>
-              </div>
-            </div>
-
-            <div className="label" style={{marginTop:10}}>Vibe / Style</div>
-            <input className="input" value={vibe} onChange={e=>setVibe(e.target.value)} placeholder="fast-cut, appetizing, street-food vibe, upbeat music" />
-
-            <div className="label" style={{marginTop:10}}>CTA</div>
-            <textarea value={cta} onChange={e=>setCta(e.target.value)} placeholder="Lokasi, waktu, QR/link, handle TikTok" />
-
+            <h3 style={{marginTop:0}}>2) Upload Model (Opsyenal)</h3>
+            <input className="input" type="file" accept="image/*" onChange={uploadModel}/>
+            {modelDataURL ? (
+              <>
+                <div className="label" style={{marginTop:10}}>Preview</div>
+                <img src={modelDataURL} alt="model" style={{width:"100%",borderRadius:12,border:"1px solid #1e2330"}}/>
+              </>
+            ) : (
+              <div className="muted mini">Boleh skip — AI akan generate scene tanpa model jika kosong.</div>
+            )}
             <div className="stack" style={{marginTop:12}}>
-              <button className="btn" onClick={generatePromoScript}>Build Script (JSON)</button>
-              <button className="btn primary" onClick={generatePromoVideo}>Generate Promo Video</button>
+              <button className="btn" onClick={()=>setStep(1)}>Back</button>
+              <button className="btn primary" disabled={!canNext2 || busy} onClick={runGenerate}>
+                {busy? "Generating..." : "Generate (max 5)"}
+              </button>
             </div>
           </div>
 
           <div className="card half">
-            <div className="label">Shot Plan (Auto)</div>
-            <ul className="mini">
-              <li>0–3s: Hero shot produk (glow, steam/smoke subtle)</li>
-              <li>3–6s: Macro tekstur (crispy/juicy)</li>
-              <li>6–10s: Suasana kedai / tangan serve</li>
-              <li>10–14s: B-roll parallax + harga/logo</li>
-              <li>14–{duration}s: CTA + lokasi + jam operasi</li>
-            </ul>
-            {previewUrl && (
-              <>
-                <div className="label" style={{marginTop:10}}>Reference Composite</div>
-                <img src={previewUrl} alt="ref" style={{width:"100%",borderRadius:12,border:"1px solid #1e2330"}}/>
-              </>
+            <div className="label">Tetapan ringkas</div>
+            <div className="stack">
+              <div style={{flex:1}}>
+                <div className="label">Aspect Ratio</div>
+                <select className="input" value={ratio} onChange={e=>setRatio(e.target.value)}>
+                  <option>9:16</option><option>16:9</option><option>1:1</option><option>3:4</option><option>4:3</option>
+                </select>
+              </div>
+              <div style={{flex:1}}>
+                <div className="label">Nama Produk</div>
+                <input className="input" value={productName} onChange={e=>setProductName(e.target.value)} />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* STEP 3: RESULTS */}
+      {step===3 && (
+        <>
+          <div className="card">
+            <h3 style={{marginTop:0}}>3) Pilih Hasil (tap salah satu)</h3>
+            {gallery?.length ? (
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12}}>
+                {gallery.map((img,idx)=>(
+                  <div key={idx}
+                       onClick={()=>setPicked(img)}
+                       style={{
+                         borderRadius:12, overflow:"hidden", cursor:"pointer",
+                         outline: picked===img ? "3px solid #6ae3ff" : "1px solid #1e2330"
+                       }}>
+                    <img src={img} alt={`opt-${idx}`} style={{width:"100%",display:"block"}}/>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="muted">Tiada hasil lagi. Balik ke Step 2 dan tekan Generate.</div>
             )}
+            <div className="stack" style={{marginTop:12}}>
+              <button className="btn" onClick={()=>setStep(2)}>Back</button>
+              <button className="btn primary" disabled={!picked || busy} onClick={makePromo}>
+                {busy? "Building..." : "Generate Promo Video"}
+              </button>
+            </div>
+          </div>
+
+          <div className="card half">
+            <div className="label">Brand</div>
+            <input className="input" value={brand} onChange={e=>setBrand(e.target.value)} />
+            <div className="label" style={{marginTop:10}}>CTA</div>
+            <input className="input" value={cta} onChange={e=>setCta(e.target.value)} />
+          </div>
+
+          <div className="card half">
+            <div className="label">Durasi (s)</div>
+            <input className="input" type="number" min="6" max="60" value={duration} onChange={e=>setDuration(Number(e.target.value))}/>
           </div>
         </>
       )}
