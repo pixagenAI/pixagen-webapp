@@ -31,16 +31,10 @@ const NAV = [
 
 export default function App(){
   const [route, setRoute] = useState("settings");
-  const [search, setSearch] = useState("");
   const [logs, setLogs] = useState([]);
   const [navOpen, setNavOpen] = useState(false);
 
   const addLog = (entry) => setLogs(prev => [{ time: new Date().toLocaleString(), ...entry }, ...prev]);
-
-  const handleHealth = async () => {
-    try{ const res = await ping(); addLog({ action:"PING", data: res.data }); }
-    catch(e){ addLog({ action:"PING_ERROR", error: e?.message || String(e) }); }
-  };
 
   const CurrentPage = useMemo(() => {
     switch(route){
@@ -56,6 +50,12 @@ export default function App(){
     }
   }, [route, logs]);
 
+  // optional: still have health ping on brand long-press (for dev)
+  const pingHealth = async () => {
+    try { const res = await ping(); addLog({ action: "PING", data: res.data }); }
+    catch (e) { addLog({ action: "PING_ERROR", error: e?.message || String(e) }); }
+  };
+
   return (
     <div className="app">
       {/* overlay for mobile */}
@@ -63,7 +63,7 @@ export default function App(){
 
       {/* Sidebar */}
       <aside className={`sidebar ${navOpen ? "show":""}`}>
-        <div className="brand">
+        <div className="brand" style={{marginBottom:10}}>
           <div className="brand-badge"></div>
           <h1>PixaGen Studio</h1>
         </div>
@@ -90,28 +90,23 @@ export default function App(){
 
       {/* Main */}
       <main className="main">
+        {/* Minimal topbar: ONLY brand (tap to toggle sidebar) */}
         <div className="topbar">
-          <div className="left">
-            <button className="menu-btn" onClick={()=>setNavOpen(v=>!v)}>☰</button>
-            <span className="chip">UI v2.3</span>
-            <span className="chip">API 3001</span>
-            <button className="btn" onClick={handleHealth}>Health</button>
-          </div>
-
-          <div className="search">
-            <input className="input" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Cari setting / tools / aset..." />
-          </div>
-
-          <div className="stack">
-            <button className="btn">EN</button>
-            <button className="btn">Dark</button>
+          <div
+            className="brand-top"
+            onClick={()=>setNavOpen(v=>!v)}
+            onDoubleClick={pingHealth}
+            title="Tap to open menu • Double tap for Health"
+          >
+            <div className="badge"></div>
+            <div className="title">PixaGen Studio</div>
           </div>
         </div>
 
         <div className="content">
           <div className="cards">
             <div className="card hero">
-              <div className="stack" style={{justifyContent:"space-between", alignItems:"center"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <div className="muted mini">Dashboard</div>
                   <h2 style={{margin:"6px 0 0", lineHeight:1.15}}>Selamat datang ke PixaGen Studio</h2>
@@ -119,10 +114,6 @@ export default function App(){
                     Masukkan <b>Google AI Studio API Key</b> di <b>Settings</b>.  
                     Semua model (Gemini/Imagen/VEO) guna key yang sama.
                   </p>
-                </div>
-                <div className="stack">
-                  <span className="chip">Sidebar</span>
-                  <span className="chip">Serverless-ready</span>
                 </div>
               </div>
             </div>
