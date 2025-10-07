@@ -33,6 +33,7 @@ export default function App(){
   const [route, setRoute] = useState("settings");
   const [search, setSearch] = useState("");
   const [logs, setLogs] = useState([]);
+  const [navOpen, setNavOpen] = useState(false);
 
   const addLog = (entry) => setLogs(prev => [{ time: new Date().toLocaleString(), ...entry }, ...prev]);
 
@@ -56,8 +57,12 @@ export default function App(){
   }, [route, logs]);
 
   return (
-    <div className="container">
-      <aside className="sidebar">
+    <div className="app">
+      {/* overlay for mobile */}
+      <div className={`overlay ${navOpen ? "show":""}`} onClick={()=>setNavOpen(false)} />
+
+      {/* Sidebar */}
+      <aside className={`sidebar ${navOpen ? "show":""}`}>
         <div className="brand">
           <div className="brand-badge"></div>
           <h1>PixaGen Studio</h1>
@@ -67,51 +72,64 @@ export default function App(){
           <div className="nav-section" key={section.key}>
             <div className="nav-title">{section.title}</div>
             {section.items.map(item => (
-              <button key={item.id} className={`nav-btn ${route===item.id ? "active":""}`} onClick={()=>setRoute(item.id)}>
-                <span style={{marginRight:8}}>{item.icon}</span>{item.label}
+              <button
+                key={item.id}
+                className={`nav-btn ${route===item.id ? "active":""}`}
+                onClick={()=>{ setRoute(item.id); setNavOpen(false); }}
+              >
+                <span style={{marginRight:2}}>{item.icon}</span>{item.label}
               </button>
             ))}
           </div>
         ))}
 
-        <div style={{marginTop:18}} className="mini muted">
+        <div style={{marginTop:14}} className="mini muted">
           © {new Date().getFullYear()} PixaGen — Made with ❤️
         </div>
       </aside>
 
+      {/* Main */}
       <main className="main">
         <div className="topbar">
-          <div className="stack">
+          <div className="left">
+            <button className="menu-btn" onClick={()=>setNavOpen(v=>!v)}>☰</button>
+            <span className="chip">UI v2.3</span>
+            <span className="chip">API 3001</span>
             <button className="btn" onClick={handleHealth}>Health</button>
-            <span className="pill">Local API: 3001</span>
-            <span className="pill">UI v2.2</span>
           </div>
+
           <div className="search">
-            <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Cari setting / tools / aset..." />
+            <input className="input" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Cari setting / tools / aset..." />
           </div>
+
           <div className="stack">
             <button className="btn">EN</button>
             <button className="btn">Dark</button>
           </div>
         </div>
 
-        <section className="cards">
-          <div className="card hero">
-            <div className="stack" style={{justifyContent:"space-between", alignItems:"center"}}>
-              <div>
-                <div className="muted mini">Dashboard</div>
-                <h2 style={{margin:"6px 0 0"}}>Selamat datang ke PixaGen Studio</h2>
-                <p className="muted">Masukkan <b>Google AI Studio API Key</b> di <b>Settings</b>. Semua model (Gemini/Imagen/VEO) guna key yang sama.</p>
-              </div>
-              <div className="stack">
-                <span className="pill">Sidebar</span>
-                <span className="pill">Serverless-ready</span>
+        <div className="content">
+          <div className="cards">
+            <div className="card hero">
+              <div className="stack" style={{justifyContent:"space-between", alignItems:"center"}}>
+                <div>
+                  <div className="muted mini">Dashboard</div>
+                  <h2 style={{margin:"6px 0 0", lineHeight:1.15}}>Selamat datang ke PixaGen Studio</h2>
+                  <p className="muted" style={{marginTop:6}}>
+                    Masukkan <b>Google AI Studio API Key</b> di <b>Settings</b>.  
+                    Semua model (Gemini/Imagen/VEO) guna key yang sama.
+                  </p>
+                </div>
+                <div className="stack">
+                  <span className="chip">Sidebar</span>
+                  <span className="chip">Serverless-ready</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          {CurrentPage}
-        </section>
+            {CurrentPage}
+          </div>
+        </div>
       </main>
     </div>
   );
