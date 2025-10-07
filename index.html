@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ms">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>PixaGen Studio — Dashboard</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+      :root{ --bg:#0f1115;--card:#151821;--muted:#8b91a1;--ring:#2a2f3a;--brand:#6ae3ff;--brand-2:#8cff9a; }
+      *{box-sizing:border-box}
+      body{margin:0;background:#0b0e13;color:#e6eaf2;font-family:Inter,system-ui,Arial}
+      .container{display:flex;min-height:100vh}
+      .sidebar{width:260px;background:#0b0e13;border-right:1px solid var(--ring);padding:16px}
+      .main{flex:1;display:flex;flex-direction:column}
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
