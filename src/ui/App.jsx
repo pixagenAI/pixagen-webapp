@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ping, geminiGenerate, veoGenerateVideo } from "../api";
+import { BRAND } from "../brand";
 
 import ImageStudio from "./pages/ImageStudio.jsx";
 import VideoStudio from "./pages/VideoStudio.jsx";
@@ -50,7 +51,6 @@ export default function App(){
     }
   }, [route, logs]);
 
-  // optional: still have health ping on brand long-press (for dev)
   const pingHealth = async () => {
     try { const res = await ping(); addLog({ action: "PING", data: res.data }); }
     catch (e) { addLog({ action: "PING_ERROR", error: e?.message || String(e) }); }
@@ -64,8 +64,14 @@ export default function App(){
       {/* Sidebar */}
       <aside className={`sidebar ${navOpen ? "show":""}`}>
         <div className="brand" style={{marginBottom:10}}>
-          <div className="brand-badge"></div>
-          <h1>PixaGen Studio</h1>
+          <div
+            className="brand-badge"
+            style={{
+              background: `linear-gradient(135deg, ${BRAND.logo.from}, ${BRAND.logo.to})`,
+              boxShadow: "0 0 28px rgba(106,227,255,.28)"
+            }}
+          />
+          <h1>{BRAND.appName}</h1>
         </div>
 
         {NAV.map(section => (
@@ -84,7 +90,7 @@ export default function App(){
         ))}
 
         <div style={{marginTop:14}} className="mini muted">
-          © {new Date().getFullYear()} PixaGen — Made with ❤️
+          {BRAND.footer}
         </div>
       </aside>
 
@@ -98,8 +104,14 @@ export default function App(){
             onDoubleClick={pingHealth}
             title="Tap to open menu • Double tap for Health"
           >
-            <div className="badge"></div>
-            <div className="title">PixaGen Studio</div>
+            <div
+              className="badge"
+              style={{
+                background: `linear-gradient(135deg, ${BRAND.logo.from}, ${BRAND.logo.to})`,
+                boxShadow: "0 0 20px rgba(106,227,255,.25)"
+              }}
+            />
+            <div className="title">{BRAND.appName}</div>
           </div>
         </div>
 
@@ -109,7 +121,7 @@ export default function App(){
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <div className="muted mini">Dashboard</div>
-                  <h2 style={{margin:"6px 0 0", lineHeight:1.15}}>Selamat datang ke PixaGen Studio</h2>
+                  <h2 style={{margin:"6px 0 0", lineHeight:1.15}}>Selamat datang ke {BRAND.appName}</h2>
                   <p className="muted" style={{marginTop:6}}>
                     Masukkan <b>Google AI Studio API Key</b> di <b>Settings</b>.  
                     Semua model (Gemini/Imagen/VEO) guna key yang sama.
